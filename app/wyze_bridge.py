@@ -21,7 +21,7 @@ import wyzecam
 
 class WyzeBridge:
     def __init__(self) -> None:
-        print("🚀 STARTING DOCKER-WYZE-BRIDGE v1.4.4\n")
+        print("🚀 STARTING DOCKER-WYZE-BRIDGE THREADING\n")
         signal.signal(signal.SIGTERM, lambda n, f: self.clean_up())
         self.hass: bool = bool(os.getenv("HASS"))
         self.on_demand: bool = bool(os.getenv("ON_DEMAND"))
@@ -36,7 +36,7 @@ class WyzeBridge:
         self.rtsp = None
         self.auth: wyzecam.WyzeCredential = None
         self.user: wyzecam.WyzeAccount = None
-        self.stop_flag = multiprocessing.Event()
+        self.stop_flag = threading.Event()
         if self.hass:
             print("\n🏠 Home Assistant Mode")
             os.makedirs(self.token_path, exist_ok=True)
@@ -50,6 +50,7 @@ class WyzeBridge:
         if os.getenv("WEBRTC"):
             self.get_webrtc()
         self.start_rtsp_server()
+        self.iotc = wyzecam.WyzeIOTC(max_num_av_channels=len(self.cameras)).__enter__()
         self.start_all_streams()
 
     def update_health(self):
@@ -79,24 +80,25 @@ class WyzeBridge:
                         f"⏰ Timed out connecting to {name} ({self.connect_timeout}s)."
                     )
                     if stream.get("process"):
-                        stream["process"].kill()
+                        log.critical("\n\nIOTC is blocked!\n\n")
+                        self.iotc.tutk_platform_lib.IOTC_Connect_Stop()
                     self.streams[name] = {"sleep": int(time.time() + cooldown)}
-                elif process := stream.get("process"):
-                    if process.exitcode in (19, 68) and refresh_cams:
+                elif stream.get("process") and (exit_code := stream.get("exit_code")):
+                    if exit_code in (19, 68) and refresh_cams:
                         refresh_cams = False
                         log.info("♻️ Attempting to refresh list of cameras")
                         self.get_wyze_data("cameras", enable_cached=False)
 
-                    if process.exitcode in (1, 19, 68):
+                    if exit_code in (1, 19, 68):
                         self.start_stream(name)
-                    elif process.exitcode in (90,):
+                    elif exit_code in (90,):
                         if env_bool("IGNORE_OFFLINE"):
                             log.info(f"🪦 {name} is offline. Will NOT try again.")
                             del self.streams[name]
                             continue
                         log.info(f"👻 {name} offline. WILL retry in {cooldown}s.")
                         self.streams[name] = {"sleep": int(time.time() + cooldown)}
-                    elif process.exitcode:
+                    elif exit_code:
                         del self.streams[name]
                 elif (sleep := stream["sleep"]) and sleep <= time.time():
                     self.start_stream(name)
@@ -112,9 +114,8 @@ class WyzeBridge:
         cam = next(c for c in self.cameras if c.nickname == name)
         model = model_names.get(cam.product_model, cam.product_model)
         log.info(f"🎉 Connecting to WyzeCam {model} - {name} on {cam.ip} (1/3)")
-        connected = multiprocessing.Event()
-
-        stream = multiprocessing.Process(
+        connected = threading.Event()
+        stream = threading.Thread(
             target=self.start_tutk_stream,
             args=(cam, self.stop_flag, connected, offline),
             name=name,
@@ -344,8 +345,8 @@ class WyzeBridge:
         exit_code = 1
         audio = env_bool(f"ENABLE_AUDIO_{uri}", env_bool("ENABLE_AUDIO"), style="bool")
         try:
-            with wyzecam.WyzeIOTC() as wyze_iotc, wyzecam.WyzeIOTCSession(
-                wyze_iotc.tutk_platform_lib,
+            with wyzecam.WyzeIOTCSession(
+                self.iotc.tutk_platform_lib,
                 self.user,
                 cam,
                 *(get_env_quality(uri, cam.product_model)),
@@ -386,7 +387,7 @@ class WyzeBridge:
             if "audio_thread" in locals() and audio_thread.is_alive():
                 open(f"/tmp/{uri.lower()}.wav", "r").close()
                 audio_thread.join()
-            sys.exit(exit_code)
+            self.streams[cam.nickname]["exit_code"] = exit_code
 
     def get_webrtc(self):
         """Print out WebRTC related information for all available cameras."""
@@ -727,11 +728,11 @@ if __name__ == "__main__":
             + ("WYZE_PASSWORD" if not os.getenv("WYZE_PASSWORD") else ""),
         )
         sys.exit(1)
-    multiprocessing.current_process().name = "WyzeBridge"
+    threading.current_thread().name = "WyzeBridge"
     logging.basicConfig(
-        format="%(asctime)s [%(name)s][%(levelname)s][%(processName)s] %(message)s"
+        format="%(asctime)s [%(name)s][%(levelname)s][%(threadName)s] %(message)s"
         if env_bool("DEBUG_LEVEL")
-        else "%(asctime)s [%(processName)s] %(message)s",
+        else "%(asctime)s [%(threadName)s] %(message)s",
         datefmt="%Y/%m/%d %X",
         stream=sys.stdout,
         level=logging.WARNING,
