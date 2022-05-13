@@ -89,6 +89,9 @@ class WyzeIOTC:
         license_status = tutk.TUTK_SDK_Set_License_Key(tutk_platform_lib, sdk_key)
         if license_status < 0:
             raise tutk.TutkError(license_status)
+        # tutk_platform_lib.TUTK_SDK_Set_Region("3")
+        if (set_region := tutk_platform_lib.TUTK_SDK_Set_Region_Code("3")) < 0:
+            raise tutk.TutkError(set_region)
 
         self.tutk_platform_lib: CDLL = tutk_platform_lib
         self.initd = False
@@ -246,6 +249,7 @@ class WyzeIOTCSession:
         bitrate: int = tutk.BITRATE_HD,
         enable_audio: bool = True,
         connect_timeout: int = 20,
+        session_id: int = None,
     ) -> None:
         """Construct a wyze iotc session.
 
@@ -263,7 +267,7 @@ class WyzeIOTCSession:
         self.tutk_platform_lib: CDLL = tutk_platform_lib
         self.account: WyzeAccount = account
         self.camera: WyzeCamera = camera
-        self.session_id: Optional[c_int] = None
+        self.session_id: Optional[c_int] = session_id
         self.av_chan_id: Optional[c_int] = None
         self.state: WyzeIOTCSessionState = WyzeIOTCSessionState.DISCONNECTED
 
@@ -818,8 +822,9 @@ class WyzeIOTCSession:
     ):
         try:
             self.state = WyzeIOTCSessionState.IOTC_CONNECTING
-
-            session_id = tutk.iotc_get_session_id(self.tutk_platform_lib)
+            session_id = self.session_id
+            if self.session_id is None:
+                session_id = tutk.iotc_get_session_id(self.tutk_platform_lib)
             if session_id < 0:  # type: ignore
                 raise tutk.TutkError(session_id)
             self.session_id = session_id
@@ -844,7 +849,7 @@ class WyzeIOTCSession:
                 raise tutk.TutkError(session_id)
             self.session_id = session_id
 
-            self.session_check()
+            # self.session_check()
 
             resend = int(os.getenv("RESEND", 1))
             if self.camera.product_model in ("WVOD1", "HL_WCO2"):

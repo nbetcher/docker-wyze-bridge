@@ -21,7 +21,7 @@ import wyzecam
 
 class WyzeBridge:
     def __init__(self) -> None:
-        print("🚀 STARTING DOCKER-WYZE-BRIDGE THREADING\n")
+        print("🚀 STARTING DOCKER-WYZE-BRIDGE MT 2\n")
         signal.signal(signal.SIGTERM, lambda n, f: self.clean_up())
         self.hass: bool = bool(os.getenv("HASS"))
         self.on_demand: bool = bool(os.getenv("ON_DEMAND"))
@@ -50,7 +50,9 @@ class WyzeBridge:
         if os.getenv("WEBRTC"):
             self.get_webrtc()
         self.start_rtsp_server()
-        self.iotc = wyzecam.WyzeIOTC(max_num_av_channels=len(self.cameras)).__enter__()
+        self.iotc = wyzecam.WyzeIOTC(
+            udp_port=45454, max_num_av_channels=len(self.cameras)
+        ).__enter__()
         self.start_all_streams()
 
     def update_health(self):
@@ -80,8 +82,13 @@ class WyzeBridge:
                         f"⏰ Timed out connecting to {name} ({self.connect_timeout}s)."
                     )
                     if stream.get("process"):
-                        log.critical("\n\nIOTC is blocked!\n\n")
-                        self.iotc.tutk_platform_lib.IOTC_Connect_Stop()
+                        if session_id := stream.get("session_id"):
+                            stop = self.iotc.tutk_platform_lib.IOTC_Connect_Stop_BySID(
+                                session_id
+                            )
+                            print(f"{session_id=}")
+                            print(f"{stop=}")
+                            self.streams[name]["session_id"] = None
                     self.streams[name] = {"sleep": int(time.time() + cooldown)}
                 elif stream.get("process") and (exit_code := stream.get("exit_code")):
                     if exit_code in (19, 68) and refresh_cams:
@@ -344,6 +351,13 @@ class WyzeBridge:
         uri = clean_name(cam.nickname, upper=True)
         exit_code = 1
         audio = env_bool(f"ENABLE_AUDIO_{uri}", env_bool("ENABLE_AUDIO"), style="bool")
+        session_id = 0
+        while session_id <= 0:
+            session_id = wyzecam.tutk.tutk.iotc_get_session_id(
+                self.iotc.tutk_platform_lib
+            )
+            time.sleep(1)
+        self.streams[cam.nickname]["session_id"] = session_id
         try:
             with wyzecam.WyzeIOTCSession(
                 self.iotc.tutk_platform_lib,
@@ -352,6 +366,7 @@ class WyzeBridge:
                 *(get_env_quality(uri, cam.product_model)),
                 enable_audio=audio,
                 connect_timeout=self.connect_timeout,
+                session_id=session_id,
             ) as sess:
                 connected.set()
                 fps, audio = get_cam_params(sess, uri, audio)
