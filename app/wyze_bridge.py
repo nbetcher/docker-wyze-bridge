@@ -50,9 +50,7 @@ class WyzeBridge:
         if os.getenv("WEBRTC"):
             self.get_webrtc()
         self.start_rtsp_server()
-        self.iotc = wyzecam.WyzeIOTC(
-            udp_port=45454, max_num_av_channels=len(self.cameras)
-        ).__enter__()
+        self.iotc = wyzecam.WyzeIOTC(max_num_av_channels=len(self.cameras)).__enter__()
         self.start_all_streams()
 
     def update_health(self):
