@@ -119,11 +119,14 @@ class WyzeIOTC:
         if errno < 0:
             raise tutk.TutkError(errno)
 
+        if (rdt_chans := tutk.rdt_initialize(self.tutk_platform_lib)) < 0:
+            raise tutk.TutkError(rdt_chans)
+
         actual_num_chans = tutk.av_initialize(
             self.tutk_platform_lib, max_num_channels=self.max_num_av_channels
         )
         if actual_num_chans < 0:
-            raise tutk.TutkError(errno)
+            raise tutk.TutkError(actual_num_chans)
 
         self.max_num_av_channels = actual_num_chans
 
@@ -132,6 +135,7 @@ class WyzeIOTC:
 
         This is called automatically by the context manager
         """
+        tutk.rdt_deinitialize(self.tutk_platform_lib)
         tutk.av_deinitialize(self.tutk_platform_lib)
         tutk.iotc_deinitialize(self.tutk_platform_lib)
 

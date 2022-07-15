@@ -1052,14 +1052,6 @@ def iotc_initialize(tutk_platform_lib: CDLL, udp_port: int = 0) -> int:
     return errno
 
 
-def TUTK_SDK_Set_License_Key(tutk_platform_lib: CDLL, key: str) -> int:
-
-    errno: int = tutk_platform_lib.TUTK_SDK_Set_License_Key(
-        c_char_p(key.encode("ascii"))
-    )
-    return errno
-
-
 def iotc_deinitialize(tutk_platform_lib: CDLL) -> c_int:
     """Deinitialize IOTC module.
 
@@ -1069,6 +1061,45 @@ def iotc_deinitialize(tutk_platform_lib: CDLL) -> c_int:
     :return: Error code if return value < 0
     """
     errno: c_int = tutk_platform_lib.IOTC_DeInitialize()
+    return errno
+
+
+def rdt_initialize(tutk_platform_lib: CDLL) -> int:
+    """Initialize RDT module.
+
+    This function is used by RDT servers or RDT clients to initialize RDT
+    module and shall be called before any RDT module related function
+    is invoked, except RDT_Set_Max_Channel_Number().
+
+    :param tutk_platform_lib: The underlying c library (from tutk.load_library())
+    :return: The actual maximum number of allowable RDT channels if initializing successfully, Error code if return value < 0
+    """
+
+    max_chans: int = tutk_platform_lib.RDT_Initialize()
+    return max_chans
+
+
+def rdt_deinitialize(tutk_platform_lib: CDLL) -> int:
+    """Deinitialize RDT module.
+
+    This function will deinitialize RDT module.
+    (1) RDT module shall be deinitialized before IOTC module is deinitialized.
+    (2) All RDT connection should call RDT_Abort or RDT_Destroy before doing
+    RDT_Deinitialize.
+
+    :param tutk_platform_lib: The underlying c library (from tutk.load_library())
+    :return: Error code if return value < 0
+    """
+
+    errno: int = tutk_platform_lib.RDT_DeInitialize()
+    return errno
+
+
+def TUTK_SDK_Set_License_Key(tutk_platform_lib: CDLL, key: str) -> int:
+
+    errno: int = tutk_platform_lib.TUTK_SDK_Set_License_Key(
+        c_char_p(key.encode("ascii"))
+    )
     return errno
 
 
