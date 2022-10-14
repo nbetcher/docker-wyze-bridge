@@ -1,14 +1,14 @@
 name: Docker
 
 on:
-  schedule:
-    - cron: "31 22 * * *"
+  #schedule:
+  #  - cron: "31 22 * * *"
   push:
     branches: [main, dev]
     # Publish semver tags as releases.
     tags: ["v*.*.*"]
-  pull_request:
-    branches: [main]
+  #pull_request:
+  #  branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
         with:
-          platforms: linux/amd64,linux/arm64,linux/arm
+          platforms: linux/amd64
 
       - name: Set up Docker Buildx
         id: buildx
@@ -71,14 +71,14 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           context: ./app/
           push: ${{ github.event_name != 'pull_request' }}
-          file: ./app/multi-arch.Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/arm
+          file: ./app/dockerfile.hwaccel
+          platforms: linux/amd64
           # build-args: SDK_KEY=${{secrets.SDK_KEY}}
           labels: |
-            ${{ steps.meta.outputs.labels }}
+            ${{ steps.met.outputs.labels }}
             io.hass.name=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.title'] }}
             io.hass.description=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.description'] }}
             io.hass.version=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
             io.hass.type=addon
-            io.hass.arch=amd64,armhf,aarch64
+            io.hass.arch=amd64
           tags: ${{ steps.meta.outputs.tags }}
