@@ -71,7 +71,7 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           context: ./app/
           push: ${{ github.event_name != 'pull_request' }}
-          file: ./app/dockerfile.hwaccel
+          file: ./app/Dockerfile.hwaccel
           platforms: linux/amd64
           # build-args: SDK_KEY=${{secrets.SDK_KEY}}
           labels: |
